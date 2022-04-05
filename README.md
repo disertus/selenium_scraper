@@ -2,7 +2,7 @@
 
 Keep in mind: this script makes use of the chrome webdriver. Please install both **[Google Chrome browser](https://www.google.com/chrome/)** and **[Chrome webdriver](https://chromedriver.chromium.org/downloads)** before running it.
 
-###Functions of the script
+### Functions of the script
 - walks through a list of communities / public accounts
 - walks down throught each post on the page
   - recursively unfolds comments under each post till the last comment under the post is reached
