@@ -6,8 +6,6 @@ import time
 import re
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support.expected_conditions import element_to_be_clickable
 
 from profile_login import login_to_profile
 # from selenium.webdriver.chrome.options import Options
@@ -37,29 +35,34 @@ def unfold_all_comments(post, id, comment_ids):
         [temp_set.add(item.text) for item in comments_list]
         if "Show more comments" in temp_set or "Show next comment" in temp_set:
             for com in comments_list:
-                coordinates = com.location_once_scrolled_into_view  # returns dict of X, Y coordinates
                 if com.text == "Show more comments" or com.text == "Show next comment":
                     # scrolls directly to the coordinates of a comment on the page
-                    driver.execute_script(f'window.scrollTo({coordinates["x"]}, {coordinates["y"]});')
+                    driver.execute_script(f'window.scrollTo({com.location["x"]}, {com.location["y"] - 70});')
                     com.click()
-                    time.sleep(1.5)
+                    time.sleep(2)
                     parse_comment_contents(post, id, comment_ids)
                 else:
-                    driver.execute_script(f'window.scrollTo({coordinates["x"]}, {coordinates["y"]});')
+                    driver.execute_script(f'window.scrollTo({com.location["x"]}, {com.location["y"] - 70});')
                     parse_comment_contents(post, id, comment_ids)
                     continue
             unfold_all_comments(post, id, comment_ids)
         else:
+            driver.execute_script(f'window.scrollTo({post.location["x"]}, {post.location["y"]});')
+            time.sleep(2)
             parse_comment_contents(post, id, comment_ids)
     except Exception as e:
         logging.warning(f"Did not find any comments to unfold. Error: {e}")
         parse_comment_contents(post, id, comment_ids)
 
 
-def parse_post_contents(driver_instance):
+def parse_post_contents(driver_instance, post_id_list):
     posts = driver_instance.find_elements(by=By.CLASS_NAME, value="post_content")
-    for post in posts[-10:]:
-        yield post
+    for post in posts:
+        if post.id not in post_id_list:
+            post_ids.add(post.id)
+            yield post
+        else:
+            continue
 
 
 def count_likes(reply_content):
@@ -97,9 +100,11 @@ def parse_comment_contents(post, id, comment_ids: set):
 
 if __name__ == '__main__':
     base_url = "https://vk.com/"
-    id_list = re.split("\n", """public39009769""")
-# public22741624
+    id_list = re.split("\n", """public57846937""")
+# public56106344
 # public25554967
+# public39009769
+# public22741624
 # public40567146
 # public39728801
 # public38683579
@@ -113,12 +118,10 @@ if __name__ == '__main__':
 # public30022666
 # interestplanet_ru
 # public28477986
-# public57846937
 # public12382740
 # public31836774
 # public23064236
 # public29246653
-# public56106344
 # public43776215
 # public40498005
 # public26750264
@@ -132,16 +135,19 @@ if __name__ == '__main__':
     project_path = f"{os.getcwd()}/results_selenium/refactored_script"
     chrome_options = webdriver.ChromeOptions()
     prefs = {"profile.managed_default_content_settings.images": 2}
-    chrome_options.add_argument("--start-maximized")
     chrome_options.add_experimental_option("prefs", prefs)
+    # chrome_options.add_argument("--headless")
 
     # todo: put the path to the webdriver into the project folder
+    # todo: check if the post's date exceeds 20 Feb,
     driver = webdriver.Chrome(chrome_options=chrome_options)
+    driver.maximize_window()
     # add_all_cookies_to_session()
     comment_dict = {}
+    post_ids = set()
 
     for id in id_list:
-        failed_attempts = 0
+        batch_number = 0
         driver.get(f"{base_url}{id}")
         scroll_once(wait_time=3)
         login_to_profile.fill_login_form(drive_instance=driver)
@@ -150,13 +156,17 @@ if __name__ == '__main__':
         comment_ids = set()
         while 1:
             try:
-                for pst in parse_post_contents(driver_instance=driver):
-                    post_list = driver.find_elements(by=By.CLASS_NAME, value="post_content")
+                batch_start = time.time()
+                for pst in parse_post_contents(driver_instance=driver, post_id_list=post_ids):
+                    print(f"Parsing post comments for post {pst.id}.")
                     unfold_all_comments(pst, id, comment_ids)
                     # if (post_list.index(pst) + 1) % 10 == 0:
                         # scroll_once(3)
-                failed_attempts += 1
+                batch_end = time.time()
+                batch_number += 1
+                print(f"\nParsed posts {batch_number * 10}.")
+                print(f"Batch was parsed in: {batch_end - batch_start} seconds.")
 
             except Exception as e:
                 logging.warning(f"Failed to get the page from the id_list. Error: {e}")
-                failed_attempts += 1
+                batch_number += 1
